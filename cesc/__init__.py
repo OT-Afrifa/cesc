@@ -14,7 +14,7 @@ Typical usage
 -------------
 Single time step::
 
-    from cesc.pipeline import run_cesc_pipeline, scan_pi_stable
+    from cesc.cesc_id import run_cesc_id, scan_pi_stable
     import numpy as np
 
     dtheta_e = np.diff(theta_e_3d, axis=0)
@@ -31,7 +31,7 @@ Single time step::
 
 Seasonal batch run::
 
-    from cesc.run import run_month_streaming
+    from cesc.run_cesc import run_month_streaming
     run_month_streaming(
         nc_path="/path/to/WRF_extracted_vars_900m_feb2017.nc",
         wrfout_path="/path/to/wrfout_d02_dir/",
