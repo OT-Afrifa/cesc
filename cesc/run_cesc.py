@@ -15,7 +15,7 @@ import os
 import gc
 from glob import glob
 
-from cesc.pipeline import run_cesc_pipeline, scan_pi_stable
+from cesc.cesc_id import run_cesc_id, scan_pi_stable
 from cesc.utils import find_wrfout, read_rainnc, read_ctt, StreamingNCWriter
 
 try:
@@ -103,7 +103,7 @@ def run_month_streaming(
     wrfout_path: str,
     out_nc_path: str,
     out_parquet_path: str,
-    pipeline_kwargs: dict | None = None,
+    cesc_id_kwargs: dict | None = None,
     flush_every: int = 24,
     compress: int = 3,
 ):
@@ -125,11 +125,11 @@ def run_month_streaming(
     wrfout_path      : directory containing wrfout_d02_* files
     out_nc_path      : output gridded NetCDF path (created fresh)
     out_parquet_path : output object table parquet path
-    pipeline_kwargs  : overrides for any DEFAULT_KWARGS entries
+    cesc_id_kwargs  : overrides for any DEFAULT_KWARGS entries
     flush_every      : steps between parquet chunk flushes
     compress         : NetCDF zlib compression level
     """
-    pkw = {**DEFAULT_KWARGS, **(pipeline_kwargs or {})}
+    pkw = {**DEFAULT_KWARGS, **(cesc_id_kwargs or {})}
 
     ds, ter_da, xlat, xlong, times = open_lazy(nc_path)
     ny, nx = xlat.shape
@@ -178,7 +178,7 @@ def run_month_streaming(
             stable_threshold=pkw.get("stable_threshold", 2.0),
         )
 
-        out = run_cesc_pipeline(
+        out = run_cesc_id(
             Z_2d_da=da_t["reflectivity_1km"],
             ter_da=ter_da,
             HWP_da=da_t.get("HWP"),
