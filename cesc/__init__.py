@@ -22,7 +22,7 @@ Single time step::
         dtheta_e, heights_3d, max_pi_height=5000.0,
         unstable_threshold=1.0, stable_threshold=2.0,
     )
-    result = run_cesc_pipeline(
+    result = run_cesc_id(
         Z_2d_da=reflectivity_da, ter_da=terrain_da,
         pi_strength_da=pi_str, stable_strength_da=st_str,
         pi_start_h_da=pi_h0, pi_end_h_da=pi_h1,
