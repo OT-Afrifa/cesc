@@ -140,7 +140,7 @@ release.
 ```python
 import numpy as np
 import xarray as xr
-from cesc.pipeline import run_cesc_pipeline, scan_pi_stable
+from cesc.cesc_id import run_cesc_id, scan_pi_stable
 
 # Load one time step from your pre-extracted file
 ds = xr.open_dataset("WRF_extracted_vars_900m_feb2017.nc",
@@ -160,7 +160,7 @@ pi_str, pi_dep, st_str, st_dep, pi_h0, pi_h1, st_h0, st_h1 = scan_pi_stable(
 )
 
 # Stages 2 and 3: detect and gate CESC objects
-result = run_cesc_pipeline(
+result = run_cesc_id(
     Z_2d_da            = da_t["reflectivity_1km"],
     ter_da             = da_t["ter"],
     HWP_da             = da_t["HWP"],
@@ -189,15 +189,15 @@ result["fig"].savefig("cesc_2200UTC.png", dpi=150, bbox_inches="tight")
 ### Batch run for a full month (low memory, streaming output)
 
 ```python
-from cesc.run import run_month_streaming
+from cesc.run_cesc import run_month_streaming
 
 run_month_streaming(
     nc_path          = "/data/WRF_extracted_vars_900m_feb2017.nc",
     wrfout_path      = "/data/wrfout_d02/",
     out_nc_path      = "/output/CESC_grids_feb2017.nc",
     out_parquet_path = "/output/CESC_objects_feb2017.parquet",
-    pipeline_kwargs  = dict(
-        frac_strong_cutoff = 0.5,   # tune on the 7 Feb 2017 case first
+    cesc_id_kwargs  = dict(
+        frac_strong_cutoff = 0.5,   # tuned on the 7 Feb 2017 SNOWIE case 
     ),
 )
 ```
@@ -207,10 +207,10 @@ file is opened lazily and only one hour is loaded at a time.
 
 ### Command-line interface
 
-After installation, a `run-cesc` command is available:
+After installation, a `execute-cesc` command is available:
 
 ```bash
-run-cesc \
+execute-cesc \
     --nc  /data/WRF_extracted_vars_900m_feb2017.nc \
     --wrf /data/wrfout_d02/ \
     --out_nc /output/CESC_grids_feb2017.nc \
@@ -219,7 +219,7 @@ run-cesc \
     --frac_strong_cutoff 0.5
 ```
 
-Run `run-cesc --help` for the full parameter list.
+Run `execute-cesc --help` for the full parameter list.
 
 ---
 
@@ -273,8 +273,8 @@ Key columns include `time`, `object_uid`, `cls` (cell/band/complex),
 | `min_speed` | 2.0 m/s | Minimum wind speed to draw a corridor |
 | `frac_strong_cutoff` | 0.5 | Threshold separating faint from strong objects |
 
-Note: `box_sizes` (default 20, 40, 80 km) is a structural design choice rather
-than a tunable threshold.  It controls which spatial scales are used to compute
+Note: `box_sizes` (default 20, 40, 80 km) is a structural design choice. 
+It controls which spatial scales are used to compute
 the adaptive detection background.  Smaller boxes catch sharp isolated cells;
 larger boxes catch broader organised clusters.  The union across scales is taken
 to avoid missing either type.  This follows the same multi-scale union design
@@ -285,7 +285,7 @@ used by Yeh and Colle (2025).
 ## Tuning `frac_strong_cutoff`
 
 The `frac_strong_cutoff` parameter controls the boundary between faint and
-strong objects.  To set this for your dataset:
+strong objects.  In the SNOWIE dataset, we set this following:
 
 1. Run the single-time-step example on the 7 February 2017 22 UTC snapshot
    (the best-observed CESC event in the SNOWIE dataset).
