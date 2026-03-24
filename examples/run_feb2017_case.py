@@ -35,7 +35,7 @@ import numpy as np
 import xarray as xr
 import pandas as pd
 
-from cesc.pipeline import run_cesc_pipeline, scan_pi_stable
+from cesc.cesc_id import run_cesc_id, scan_pi_stable
 
 
 def parse_args():
@@ -72,8 +72,8 @@ def main():
         stable_threshold   = 2.0,
     )
 
-    print("Running CESC pipeline ...")
-    result = run_cesc_pipeline(
+    print("Running CESC ID ...")
+    result = run_cesc_id(
         Z_2d_da            = da_t["reflectivity_1km"],
         ter_da             = da_t["ter"],
         HWP_da             = da_t.get("HWP"),
