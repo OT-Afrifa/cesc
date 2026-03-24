@@ -1,16 +1,16 @@
 #!/usr/bin/env python
 """
-scripts/run_cesc.py
+scripts/execute_cesc.py
 -------------------
 Command-line entry point for the CESC batch runner.
 
-Installed as ``run-cesc`` when you pip-install the package.
+Installed as ``execute-cesc`` when you pip-install the package.
 
 Usage
 -----
 ::
 
-    run-cesc --nc /path/to/WRF_extracted_vars_900m_feb2017.nc \\
+    execute-cesc --nc /path/to/WRF_extracted_vars_900m_feb2017.nc \\
              --wrf /path/to/wrfout_d02_dir/ \\
              --out_nc /path/to/CESC_grids_feb2017.nc \\
              --out_pq /path/to/CESC_objects_feb2017.parquet
@@ -18,7 +18,7 @@ Usage
 All pipeline parameters can be overridden with --key value flags.  Boolean
 flags use 1/0 (e.g. --use_advection 1).
 
-Run ``run-cesc --help`` for the full parameter list.
+Run ``execute-cesc --help`` for the full parameter list.
 """
 
 import argparse
@@ -36,7 +36,7 @@ def parse_args():
     p.add_argument("--out_nc", required=True, help="Output gridded NetCDF path")
     p.add_argument("--out_pq", required=True, help="Output object parquet path")
 
-    # Optional pipeline parameters (Table 1 defaults)
+    # Optional cesc id parameters (Table 1 defaults)
     p.add_argument("--unstable_threshold",  type=float, default=1.0)
     p.add_argument("--stable_threshold",    type=float, default=2.0)
     p.add_argument("--faint_min_diff",      type=float, default=2.0)
@@ -66,9 +66,9 @@ def main():
     os.makedirs(os.path.dirname(os.path.abspath(args.out_nc)), exist_ok=True)
     os.makedirs(os.path.dirname(os.path.abspath(args.out_pq)), exist_ok=True)
 
-    from cesc.run import run_month_streaming
+    from cesc.run_cesc import run_month_streaming
 
-    pipeline_kwargs = dict(
+    cesc_id_kwargs = dict(
         unstable_threshold = args.unstable_threshold,
         stable_threshold   = args.stable_threshold,
         faint_min_diff     = args.faint_min_diff,
@@ -93,7 +93,7 @@ def main():
         wrfout_path      = args.wrf,
         out_nc_path      = args.out_nc,
         out_parquet_path = args.out_pq,
-        pipeline_kwargs  = pipeline_kwargs,
+        cesc_id_kwargs  = cesc_id_kwargs,
         flush_every      = args.flush_every,
         compress         = args.compress,
     )
