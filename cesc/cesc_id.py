@@ -1,4 +1,4 @@
-# cesc/pipeline.py
+# cesc/cesc_id.py
 """
 Main CESC ID pipeline.
 
@@ -403,7 +403,7 @@ def _wind_L_W(mask_bool, cy, cx, u_bar, v_bar, dx_km, dy_km, slc):
 # Main pipeline function
 # ---------------------------------------------------------------------------
 
-def run_cesc_pipeline(
+def run_cesc_id(
     Z_2d_da, ter_da,
     HWP_da=None,
     pi_strength_da=None, stable_strength_da=None,
