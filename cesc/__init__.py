@@ -58,12 +58,12 @@ Yeh, P., and B. A. Colle, 2025: A Comparison of Approaches to Objectively
 __version__ = "1.0.0"
 __author__  = "Francis Osei Tutu Afrifa, Bart Geerts"
 
-from cesc.pipeline import run_cesc_pipeline, scan_pi_stable
+from cesc.cesc_id import run_cesc_id, scan_pi_stable
 from cesc.id_pro    import detect_objects_id_pro, ObjectProps
 from cesc.utils     import find_wrfout, StreamingNCWriter
 
 __all__ = [
-    "run_cesc_pipeline",
+    "run_cesc_id",
     "scan_pi_stable",
     "detect_objects_id_pro",
     "ObjectProps",
