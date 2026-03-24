@@ -67,7 +67,7 @@ Issues = "https://github.com/OT-Afrifa/cesc/issues"
 Documentation = "https://cesc.readthedocs.io"
 
 [project.scripts]
-run-cesc = "cesc.scripts.execute_cesc:main"
+execute-cesc = "cesc.scripts.execute_cesc:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
