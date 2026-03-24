@@ -1,4 +1,4 @@
-# cesc/run.py
+# cesc/run_cesc.py
 """
 Seasonal batch runner for the CESC pipeline.
 
