@@ -1,0 +1,61 @@
+cff-version: 1.2.0
+message: "If you use cesc, please cite the algorithm paper below and the software."
+title: "cesc: identification of convection embedded within or emergent from cold-season stratiform clouds"
+type: software
+license: MIT
+repository-code: "https://github.com/OT-Afrifa/cesc"
+authors:
+  - family-names: Afrifa
+    given-names: Francis O.
+  - family-names: Geerts
+    given-names: Bart
+preferred-citation:
+  type: article
+  title: "Cold-season emergent convection in frontal systems and its impact on orographic precipitation. Part 1: Detection algorithm"
+  authors:
+    - family-names: Afrifa
+      given-names: Francis O.
+    - family-names: Geerts
+      given-names: Bart
+    - family-names: Xue
+      given-names: Lulin
+    - family-names: Kukulies
+      given-names: Julia
+  journal: "Journal of the Atmospheric Sciences"
+  year: 2026
+  status: submitted
+references:
+  - type: article
+    title: "A case study of cold-season emergent orographic convection and its impact on precipitation. Part I: Mesoscale analysis"
+    authors:
+      - family-names: Afrifa
+        given-names: Francis O.
+      - family-names: Geerts
+        given-names: Bart
+      - family-names: Xue
+        given-names: Lulin
+      - family-names: Chen
+        given-names: S.
+      - family-names: Hohman
+        given-names: C.
+      - family-names: Grasmick
+        given-names: C.
+      - family-names: Zaremba
+        given-names: T.
+    journal: "Monthly Weather Review"
+    year: 2025
+    volume: 153
+    start: 2229
+    end: 2250
+    doi: "10.1175/MWR-D-24-0241.1"
+  - type: article
+    title: "A case study of cold-season emergent orographic convection and its impact on precipitation. Part 2: High-resolution LES analysis of convective cell evolution and precipitation processes"
+    authors:
+      - family-names: Afrifa
+        given-names: Francis O.
+    journal: "Monthly Weather Review"
+    year: 2026
+    volume: 154
+    start: 1269
+    end: 1290
+    doi: "10.1175/MWR-D-25-0157.1"

@@ -1,0 +1,213 @@
+#!/bin/bash
+
+# ---------------------------------------------------------
+# PBS job settings
+# ---------------------------------------------------------
+
+# Job name
+#PBS -N cesc_season_SNOWIE
+
+# Project allocation
+#PBS -A YOUR_PROJECT_CODE
+
+# queue and run on Casper
+#PBS -q casper
+
+# request 1 node/chunk, 8 CPUs, and 60 GB RAM
+#PBS -l select=1:ncpus=8:mem=60GB
+
+# Wallclock time: 9 hrs
+#PBS -l walltime=09:00:00
+
+# Merge standard output and error files
+#PBS -j oe
+
+# Directory for log files
+#PBS -o /path/to/cesc_output/logs/
+
+# Create array tasks
+#PBS -J 0-23%6
+
+#PBS -m n
+
+
+# ------------------------------------------------------------------
+# Bash safety settings
+# ------------------------------------------------------------------
+# Detect undefined variable(s) and failed commands
+set -uo pipefail
+
+
+# ------------------------------------------------------------------
+# Paths
+# ------------------------------------------------------------------
+
+# Environment setup
+CONDA_ENV=/path/to/conda-env
+PY="${CONDA_ENV}/bin/python"
+
+# CESC package/code directory
+PKG=/path/to/cesc
+
+
+# ------------------------------------------------------------------
+# Runtime environment
+# ------------------------------------------------------------------
+
+export PATH="${CONDA_ENV}/bin:${PATH}"  # place the conda environment's bin at the front of PATH
+export LD_LIBRARY_PATH="${CONDA_ENV}/lib:${LD_LIBRARY_PATH:-}"  # set library path
+
+# Match the requested 8 CPUs unless these variables were already set.
+export OMP_NUM_THREADS="${OMP_NUM_THREADS:-8}"  # keep OpenMP threads if exists or set to 8
+export NUMBA_NUM_THREADS="${NUMBA_NUM_THREADS:-8}" # set Numba threads same as above
+
+export PYTHONUNBUFFERED=1  # Unbuffered Python output to avoid temporary holding of output in a buffer
+# cd "${PKG}"
+
+# ------------------------------------------------------------------
+# Basic checks
+# ------------------------------------------------------------------
+
+if [ ! -x "${PY}" ]; then
+    echo "ERROR: Python executable not found or not executable:"
+    echo "       ${PY}"
+    exit 1
+fi
+
+if ! cd "${PKG}"; then
+    echo "ERROR: could not change directory to:"
+    echo "       ${PKG}"
+    exit 1
+fi
+
+
+# ------------------------------------------------------------------
+# Map PBS array index onto (month, environment mode)
+# ------------------------------------------------------------------
+
+MONTHS_ECE=(201611 201612 201701 201702 201703 201710 \
+            201711 201712 201801 201802 201803 201804)  # Elevated (CESC) run
+MONTHS_PI=(201611 201612 201701 201702 201703 201710 \
+            201711 201712 201801 201802 201803 201804)  # No stable BL (only PI) run
+
+N_ECE=${#MONTHS_ECE[@]}  # Determine number of ECE months
+N_PI=${#MONTHS_PI[@]}
+N_TOTAL=$(( N_ECE + N_PI ))
+
+
+# PBS_ARRAY_INDEX is supplied by PBS for each array subjob.
+# Default to zero only when the script is run outside an array job.
+IDX=${PBS_ARRAY_INDEX:-0}  # Get the PBS task number
+
+
+# ------------------------------------------------------------------
+# Validate array index before accessing either Bash array
+# ------------------------------------------------------------------
+
+if ! [[ "${IDX}" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: invalid array index: ${IDX}"
+    exit 1
+fi
+
+if [ "${IDX}" -lt 0 ] || [ "${IDX}" -ge "${N_TOTAL}" ]; then
+    echo "ERROR: array index ${IDX} is outside the valid range"
+    echo "       valid range: 0-$(( N_TOTAL - 1 ))"
+    exit 1
+fi
+
+
+# ------------------------------------------------------------------
+# Determine month and environment mode
+# ------------------------------------------------------------------
+
+if [ "${IDX}" -lt "${N_ECE}" ]; then
+
+    MONTH=${MONTHS_ECE[$IDX]}
+    MODE=ECE
+
+else
+
+    PI_IDX=$(( IDX - N_ECE ))
+
+    MONTH=${MONTHS_PI[$PI_IDX]}
+    MODE=PI_only
+
+fi
+
+
+# ------------------------------------------------------------------
+# Job information
+# ------------------------------------------------------------------
+
+echo "------------------------------------------------------------"
+echo "CESC monthly analysis"
+echo "------------------------------------------------------------"
+echo "host       : $(hostname)"  # print hostname
+echo "job id     : ${PBS_JOBID:-interactive}"  # print PBS job ID
+echo "array idx  : ${IDX}"  # print the task index
+echo "month/mode : ${MONTH} / ${MODE}"  # print month and mode
+echo "started    : $(date)"  # print start time
+echo "python     : ${PY}"
+echo "OMP threads: ${OMP_NUM_THREADS}"
+echo "NUMBA thr. : ${NUMBA_NUM_THREADS}"
+echo "------------------------------------------------------------"
+
+
+# ------------------------------------------------------------------
+# Run monthly CESC analysis
+# ------------------------------------------------------------------
+
+"${PY}" -u examples/run_month.py "${MONTH}" "${MODE}"  # run the CESC compute
+
+rc=$?
+
+# ------------------------------------------------------------------
+# Finish
+# ------------------------------------------------------------------
+
+echo "------------------------------------------------------------"
+echo "finished   : $(date)"
+echo "exit code  : ${rc}"
+echo "------------------------------------------------------------"
+
+exit "${rc}"
+
+# NOTES:
+# Each task is 1 month and individual month takes about 75 minutes under low I/O load, but
+# runtime can increase substantially when several tasks concurrently
+# read WRF output and write part files. The array is therefore capped
+# at 6 simultaneous tasks and requests a 9-hour walltime as protection
+# against shared-filesystem contention.
+#
+# IMPORTANT:
+# The PBS output directory must exist BEFORE qsub is called.
+#
+# First submission:
+#
+#   mkdir -p /path/to/cesc_output/logs
+#   qsub examples/job_run_cesc_season.pbs
+#
+# Run one array index only:
+#
+#   qsub -J 13-13 examples/job_run_cesc_season.pbs
+#
+# Do NOT use:
+#
+#   qsub -v IDX=13 examples/job_run_cesc_season.pbs
+#
+# because the script itself contains a #PBS -J array line. Exporting IDX
+# could cause multiple array subjobs to work on the same month.
+#
+# Watch:
+#
+#   qstat -u $USER
+#
+# Cancel the full array:
+#
+#   qdel <jobid>[]
+#
+# Each task is independently resumable. If one is interrupted,
+# resubmit just that array index. Timesteps already represented by
+# valid part files are skipped by run_month.py.
+#
+# Check -A against your active allocation before submitting.

@@ -1,355 +1,234 @@
-# CESC: Cold-Season Embedded/Emergent Convection Identification
+# cesc
 
-A Python package for detecting and analysing **Convection Embedded within or
-Emergent from Stratiform Clouds (CESC)** in cold-season orographic precipitation
-using convection-permitting WRF model output.
+`cesc` is the Python implementation of the algorithm of Afrifa et al. (2026a, *Journal of the Atmospheric Sciences*, in revision) for identifying convection embedded within or emergent from cold-season stratiform clouds (CESC). It finds convective cells that are rooted above a stable near-surface layer, using profiles of equivalent potential temperature, the winds in the unstable layer and a two-dimensional reflectivity field. The algorithm was built and tested on 900 m WRF output from the SNOWIE campaign over Idaho, but it runs on any gridded dataset that supplies those fields in the units listed below. You can call it from a Python script, a Jupyter notebook or the `cesc` command line.
 
-Developed at the University of Wyoming in support of the SNOWIE (Seeded and
-Natural Orographic Wintertime Clouds: the Idaho Experiment) research programme.
+## 1. What the algorithm does
 
----
+Each timestep is processed on its own in three stages.
 
-## Background
+**Stage 1 - the supportive environment:** The algorithm scans the `theta_e` profile in every grid column for a layer of potential instability (PI), where `theta_e` falls with height, sitting above a stable layer near the surface, where `theta_e` rises. A column that has both is part of the embedded/emergent convection environment (ECE). Because a cell triggered in the ECE keeps moving after it forms, the ECE is then extended downwind along the mean wind in the PI layer. The ECE and this downwind corridor together make up the support mask. Setting `env_mode="PI_only"` drops the stable-layer requirement, so the support mask then also admits surface-based convection.
 
-In cold-season frontal systems, convective cells can form above a stable
-near-surface layer when a potentially unstable (PI) layer aloft is lifted to
-saturation by frontal ascent or orographic forcing.  These elevated cells are
-decoupled from the underlying terrain, emerge above the surrounding stratiform
-cloud deck, and can deposit snowfall in locations that standard orographic
-precipitation models do not anticipate.
+**Stage 2 - convective cells:** Cells are found in the 2-D reflectivity field by comparing each grid point with a background reflectivity computed over several box sizes. A point counts as convective when it exceeds that background by an adaptive threshold, and touching convective points are grouped into objects with a watershed step. This stage runs over the whole domain and does not look at the thermodynamic environment at all.
 
-Afrifa et al. (2025) presented a detailed case study of one such event over
-the Snake River Plain and Central Idaho Mountains on 7 February 2017 during
-SNOWIE IOP12.  Afrifa et al. (2026, accepted) used 100 m large-eddy simulations
-to examine the microphysical structure of those cells.  This package implements
-the objective identification algorithm described in Afrifa et al. (Part 1,
-submitted 2026), which makes it possible to run a systematic climatological
-analysis of CESC frequency, intensity, and precipitation contribution across
-full cold seasons.
+**Stage 3 - the environmental gate:** An object from Stage 2 is kept as CESC only if at least 30% of its area and at least 5 of its grid points fall inside the support mask. Objects that fail the gate are dropped from the CESC population. Each kept object is then labeled strong or faint from the share of its area that exceeds the strong threshold.
 
----
+Surface precipitation plays no part in any of the three stages. Once the objects exist, an instantaneous surface precipitation rate can be masked by the object labels to get the precipitation that CESC produces. Use a rate for this step and not an hourly accumulation such as WRF `RAINNC`. This is because a short-lived cell moving at 15 to 30 m s⁻¹, for example, drops much of its hourly accumulation outside the footprint it has at the output time, so an accumulation assigns too little precipitation to CESC. `cesc check` warns when a precipitation field looks like an accumulation.
 
-## Algorithm overview
+The package does not track cells from one output time to the next. With hourly output such as the 900 m WRF runs, cells in these storms last roughly 20 to 40 min, and a cell moving at 20 m s⁻¹ travels about 70 km between output times, so matching cells across hours would mostly match different cells. If your output is a few minutes apart, `cesc.contrib.linker` offers an experimental advection-based linker. The package also leaves units, variable names and precipitation types as you supply them.
 
-The pipeline has three stages.
+## 2. Required inputs
 
-**Stage 1 -- ECE classification**
+| Field | Dimensions | Units | Used for |
+| --- | --- | --- | --- |
+| Reflectivity at one level (1 km AGL in Afrifa et al. 2026a) | `(time, y, x)` | dBZ | Stage 2 |
+| Equivalent potential temperature, `theta_e` | `(time, z, y, x)` | K | Stage 1 |
+| Height of each model level | `(time, z, y, x)` | m AGL | Stage 1 |
+| Zonal and meridional wind, `u` and `v` | `(time, z, y, x)` | m s⁻¹ | Downwind corridor |
+| Grid spacing, `dx` and `dy` | scalar | km | Areas and distances |
+| Instantaneous surface precipitation rate (optional) | `(time, y, x)` | mm h⁻¹ | Precipitation attribution only |
 
-Each model column is tested for the Embedded/Emergent Convection Environment
-(ECE): a surface stable layer (cumulative theta_e rise >= 2 K below 3000 m
-AGL) overlain by a potentially unstable layer (cumulative theta_e drop >= 1 K
-over at least 500 m depth, confined below 5000 m AGL).  Where both conditions
-are satisfied, the column is flagged as ECE.  If advection is enabled, a
-downstream corridor is appended using the PI-layer mean wind and an assumed
-convective lifespan (default 20 minutes).
+Reflectivity must be in dBZ, not linear units, and heights must be in meters above ground, not kilometers or meters above sea level. If your dataset has temperature, pressure and humidity but no `theta_e`, the WRF adapter computes `theta_e` with the Bolton (1980) formula. For other datasets, compute `theta_e` yourself before building the input. Skip the precipitation rate if you only need the objects and their properties.
 
-**Stage 2 -- Object detection**
+The adapters turn your data into the dataset the pipeline expects. `adapters.from_arrays(...)` takes NumPy arrays already in memory, and `adapters.from_extracted_wrf(...)` takes an extracted WRF file opened with xarray.
 
-Locally enhanced reflectivity objects are identified over the full
-precipitating domain using a multi-scale adaptive background method adapted
-from Yeh and Colle (2025).  For each of three box widths (20, 40, 80 km) a
-per-pixel local mean and standard deviation are computed; a pixel is flagged
-when its reflectivity exceeds the background by at least
-`max(min_diff, k_sigma * local_sigma)`.  This is done separately for faint
-and strong thresholds.  The union across all scales captures both small
-isolated cells and larger organised clusters.
 
-**Stage 3 -- Environmental gating and intensity classification**
+## 3. Installation
 
-Detected objects are retained as CESC only when at least 30 % of their area
-(and at least 5 pixels) falls inside the support mask (ECE core + corridor).
-Each kept object is further classified as *faint* or *strong* based on the
-fraction of its pixels that exceeded the strong detection threshold, controlled
-by the `frac_strong_cutoff` parameter.
-
----
-
-## Installation
-
-### From PyPI (when published)
+The package needs Python 3.7 or later. Installing it with pip also installs everything the algorithm needs to run: NumPy, SciPy, pandas, xarray, scikit-image, netCDF4 (so xarray can open NetCDF files), PyYAML (for `cesc run config.yaml`) and Numba. Numba changes only the run time, and the results are identical with or without it. The oldest versions tested, and the floors pip enforces, are those of the environment that ran the published production months: Python 3.7.12, NumPy 1.21.6, SciPy 1.7.3, pandas 1.3.5, xarray 0.20.2, scikit-image 0.19.2, netCDF4 1.6.5, PyYAML 6.0 and Numba 0.55.1. Install straight from GitHub with
 
 ```bash
-pip install cesc
+python -m pip install "git+https://github.com/OT-Afrifa/cesc.git"
 ```
 
-### From source
+or, from the top of a cloned copy of the repository,
 
 ```bash
-git clone https://github.com/OT-Afrifa/cesc.git
-cd cesc
-pip install -e .
+python -m pip install .
 ```
 
-### Dependencies
-
-Core runtime dependencies are declared in `pyproject.toml` and installed
-automatically by pip.  The main ones are:
-
-| Package | Version | Role |
-|---|---|---|
-| numpy | >= 1.24 | array operations |
-| numba | >= 0.57 | JIT-compiled hot loops |
-| xarray | >= 2023.1 | labelled arrays and IO |
-| scipy | >= 1.10 | image filtering, distance transforms |
-| scikit-image | >= 0.20 | watershed, peak detection |
-| wrf-python | >= 1.3.4 | reading wrfout variables |
-| cartopy | >= 0.21 | map projections for quicklook figures |
-| netCDF4 | >= 1.6 | direct NetCDF4 writing for streaming output |
-
-On NCAR Derecho, a suitable environment can be created with:
+Two groups of packages stay optional because pip often cannot build them from source. `wrf-python`, which you need only to read raw `wrfout` files, comes in with `python -m pip install ".[wrf]"`, and matplotlib and cartopy, which you need only for the quicklook figure, come in with `".[plot]"`. On HPC systems both install far more reliably from conda-forge. The repository ships an `environment.yml` that builds a complete environment in one step, after which you install `cesc` itself into it:
 
 ```bash
-module load conda
-conda create -n cesc_env python=3.11
-conda activate cesc_env
-pip install -e ".[dev]"
+conda env create -f environment.yml
+conda activate cesc
+python -m pip install -e .
 ```
 
----
+If you plan to edit the code or run analyses from inside the repository, install in editable mode instead, so that changes under `src/cesc/` take effect without reinstalling. Activate the environment you will run in (on NCAR systems, for example, `conda activate /path/to/your/environment`), confirm with `which python` that it is the interpreter you expect, and run from the repository root
 
-## Input data format
+```bash
+python setup_env.py
+```
 
-The package currently expects WRF model output that has been pre-extracted
-into monthly NetCDF files with the following variables:
+`python setup_env.py --check` reports the state of the installation without changing anything. A working editable install prints
 
-| Variable name | Dimensions | Description |
-|---|---|---|
-| `reflectivity_1km` | (time, y, x) | Simulated radar reflectivity at 1 km AGL (dBZ) |
-| `theta_e` | (time, bottom_top, y, x) | Equivalent potential temperature (K) |
-| `heights` | (time, bottom_top_stag, y, x) | Full-level heights AGL (m) |
-| `u3d` | (time, bottom_top, y, x) | Zonal wind (m/s) |
-| `v3d` | (time, bottom_top, y, x) | Meridional wind (m/s) |
-| `HWP` | (time, y, x) | 0-5 km AGL total hydrometeor water path (g/m^2) |
-| `ter` | (y, x) or (time, y, x) | Terrain height (m) |
-| `XLAT` | (y, x) | Latitudes (degrees north) |
-| `XLONG` | (y, x) | Longitudes (degrees east) |
+```text
+Package root : /path/to/cesc
+src/ exists  : True
+import cesc  : OK, version 0.1.0
+resolves to  : /path/to/cesc/src/cesc/__init__.py
+```
 
-Precipitation increments and cloud-top temperature are read directly from the
-original wrfout files, one hour at a time, so those files must be accessible
-alongside the pre-extracted NC files.
+and `cesc --help` should list the two subcommands, `check` and `run`.
 
-Support for other NWP model formats (e.g. HRRR, RAP) is planned for a future
-release.
+In Jupyter, the kernel has to use the same environment you installed into. Running `import sys; print(sys.executable)` and then `import cesc; print(cesc.__file__)` in a cell should show that environment's interpreter and, for an editable install, a path ending in `src/cesc/__init__.py`. If `import cesc` works in a terminal and fails in a notebook, the kernel is pointing at a different environment. Switch the kernel or restart it.
 
----
+## 4. Minimal working example
 
-## Quick start
-
-### Single time step (interactive / notebook)
+The script below builds a small synthetic domain on a 0.9 km grid with a stable layer under a layer of potential instability in its western half only. It places one convective cell inside that environment and one in the east, about 80 km away. Both cells pass Stage 2, but only the western cell passes the gate in Stage 3.
 
 ```python
 import numpy as np
-import xarray as xr
-from cesc.cesc_id import run_cesc_id, scan_pi_stable
+import cesc
+from cesc import adapters
+from cesc.environment import scan_pi_stable
 
-# Load one time step from your pre-extracted file
-ds = xr.open_dataset("WRF_extracted_vars_900m_feb2017.nc",
-                     decode_times=True).set_coords(["XLAT","XLONG"])
-da_t = ds.sel(time="2017-02-07 22:00")
+nz, ny, nx = 20, 120, 160
+z = np.linspace(0, 6000, nz)                      # m AGL
+heights = np.broadcast_to(z[:, None, None], (nz, ny, nx)).copy()
 
-# Compute layer delta-theta_e
-dtheta_e = np.diff(da_t["theta_e"].values.astype(np.float64), axis=0)
-heights  = da_t["heights"].values.astype(np.float64)
+# Background theta_e increases slowly with height everywhere (no PI).
+theta_e = np.broadcast_to((280 + 0.0005 * z)[:, None, None], (nz, ny, nx)).copy()
 
-# Stage 1: identify ECE columns
-pi_str, pi_dep, st_str, st_dep, pi_h0, pi_h1, st_h0, st_h1 = scan_pi_stable(
-    dtheta_e, heights,
-    max_pi_height      = 5000.0,
-    unstable_threshold = 1.0,
-    stable_threshold   = 2.0,
+# Western half: theta_e rises 4 K over the lowest 1.5 km (stable layer),
+# then falls 3 K between 2 and 3 km (PI layer).
+rise = 4.0 * np.clip(z / 1500, 0, 1)
+drop = np.where(z > 2000, -3.0 * np.clip((z - 2000) / 1000, 0, 1), 0.0)
+theta_e[:, :, : nx // 2] = (280 + rise + drop)[:, None, None]
+
+# Reflectivity: 8 dBZ background and two 30 dBZ cells.
+reflectivity = np.full((ny, nx), 8.0)
+reflectivity[50:60, 30:40] = 30.0     # inside the ECE
+reflectivity[50:60, 130:140] = 30.0   # far outside it
+
+ds = adapters.from_arrays(
+    reflectivity=reflectivity,
+    theta_e=theta_e,
+    heights=heights,
+    u3d=np.full((nz, ny, nx), 10.0),  # 10 m/s westerly
+    v3d=np.zeros((nz, ny, nx)),
+    dx_km=0.9,
+    dy_km=0.9,
 )
 
-# Stages 2 and 3: detect and gate CESC objects
-result = run_cesc_id(
-    Z_2d_da            = da_t["reflectivity_1km"],
-    ter_da             = da_t["ter"],
-    HWP_da             = da_t["HWP"],
-    pi_strength_da     = pi_str,
-    stable_strength_da = st_str,
-    pi_start_h_da      = pi_h0,
-    pi_end_h_da        = pi_h1,
-    u3d                = da_t["u3d"],
-    v3d                = da_t["v3d"],
-    heights            = da_t["heights"],
-    use_advection      = True,
-    advection_time     = 20,
-    make_plot          = True,
+params = cesc.Params(env_mode="ECE")  # Table 1 defaults
+da = ds.isel(time=0)
+
+# Stage 1: find the PI and stable layers in every column.
+dtheta_e = np.diff(da.theta_e.values, axis=0)
+pi, _, stable, _, h0, h1, _, _ = scan_pi_stable(
+    dtheta_e,
+    da.heights.values,
+    params.max_pi_height_m,
+    params.unstable_threshold,
+    params.stable_threshold,
+    params.min_pi_depth_m,
+    params.max_stable_height_m,
+    params.theta_eps,
 )
 
-# Inspect results
-kept = [o for o in result["objects"] if o["kept_env"]]
-print(f"Detected {len(kept)} CESC objects")
-print(f"  faint:  {sum(1 for o in kept if o['intensity_cls']=='faint')}")
-print(f"  strong: {sum(1 for o in kept if o['intensity_cls']=='strong')}")
+# Stages 2 and 3: detect cells and apply the environmental gate.
+result = cesc.identify_time(
+    da.reflectivity_1km, pi, stable, h0, h1,
+    u3d=da.u3d, v3d=da.v3d, heights=da.heights,
+    params=params,
+)
 
-# The quicklook figure is in result["fig"]
-result["fig"].savefig("cesc_2200UTC.png", dpi=150, bbox_inches="tight")
+cesc.print_summary(result["summary"])
 ```
 
-### Batch run for a full month (low memory, streaming output)
+Running the script prints
+
+```text
+2 watershed object; 1 kept (1 strong, 0 faint); 1 dropped at gate; mean area 80 km2; CESC area fraction 0.52%; precip fraction n/a
+```
+
+Both cells pass Stage 2. The western cell is kept, and its 30 dBZ core is 22 dBZ above the background, so it is labeled strong. The eastern cell is dropped at the gate, because none of it lies in the ECE or in the corridor downwind of it. Each cell covers 100 grid points (81 km² at 0.9 km spacing), or 0.52% of the 15,552 km² domain. The precipitation fraction is `n/a` because the example supplies no precipitation rate.
+
+## 5. Running a month of WRF output
+
+For a month of extracted WRF variables, `run_wrf_month` loops over the timesteps and writes the gridded output and the object table:
 
 ```python
-from cesc.run_cesc import run_month_streaming
+import xarray as xr
+import cesc
+from cesc import adapters
 
-run_month_streaming(
-    nc_path          = "/data/WRF_extracted_vars_900m_feb2017.nc",
-    wrfout_path      = "/data/wrfout_d02/",
-    out_nc_path      = "/output/CESC_grids_feb2017.nc",
-    out_parquet_path = "/output/CESC_objects_feb2017.parquet",
-    cesc_id_kwargs  = dict(
-        frac_strong_cutoff = 0.5,   # tuned on the 7 Feb 2017 SNOWIE case 
-    ),
+ds = adapters.from_extracted_wrf(xr.open_dataset("WRF_extracted_vars_900m_201702.nc"))
+
+grids, objects = cesc.run_wrf_month(
+    ds,
+    out_nc_path="out/grids.nc",
+    out_csv_path="out/objects.csv",
+    params=cesc.Params(env_mode="ECE"),
+    all_files_path=None,
 )
 ```
 
-Peak RAM stays near 400 MB regardless of month length because the monthly
-file is opened lazily and only one hour is loaded at a time.
+If some fields, such as `RAINNC` or cloud-top temperature, exist only in the original hourly `wrfout` files, pass the directory holding those files as `all_files_path`. The NetCDF file holds the gridded masks and labels, and the CSV holds one row per object. Object tables are written as CSV rather than Parquet, so `pyarrow` is not needed.
 
-### Command-line interface
+Run `cesc check data.nc` on each input file before a long job. It catches the problems that otherwise surface hours into a run: reflectivity in linear units, heights in kilometers, missing grid spacing and accumulated precipitation passed in as a rate. On an HPC system, submit each month as its own batch job, so a failed month can be rerun without repeating the others. The `examples/` directory has the quickstart notebook, a script that runs one month (`run_month.py`), a PBS batch script for a season and a YAML configuration for `cesc run config.yaml`.
 
-After installation, a `execute-cesc` command is available:
+## 6. Default parameters
 
-```bash
-execute-cesc \
-    --nc  /data/WRF_extracted_vars_900m_feb2017.nc \
-    --wrf /data/wrfout_d02/ \
-    --out_nc /output/CESC_grids_feb2017.nc \
-    --out_pq /output/CESC_objects_feb2017.parquet \
-    --advection_time 20 \
-    --frac_strong_cutoff 0.5
+All parameters live in `cesc.Params`, and the defaults are the production values in Table 1 of the algorithm paper. Any of them can be changed by keyword, for example `cesc.Params(box_sizes=(20.0, 40.0, 80.0))`, and `print(cesc.Params())` lists the full set. The ones that set the algorithm's behavior are
+
+| Parameter | Default | Meaning |
+| --- | --- | --- |
+| `env_mode` | `"ECE"` | `"ECE"` requires the stable layer; `"PI_only"` drops it |
+| `stable_threshold` | 2.0 K | Rise in `theta_e` that defines the stable layer |
+| `max_stable_height_m` | 3000 m | Stable layer must lie within this height AGL |
+| `unstable_threshold` | 1.0 K | Drop in `theta_e` that defines the PI layer |
+| `min_pi_depth_m` | 500 m | Minimum depth of the PI layer |
+| `max_pi_height_m` | 5000 m | PI layer must lie below this height AGL |
+| `box_sizes` | (10, 20, 40) km | Background reflectivity scales |
+| `faint_min_diff`, `strong_min_diff` | 5 dBZ, 10 dBZ | Minimum excess over the background |
+| `faint_k_sigma`, `strong_k_sigma` | 0.3, 0.3 | Weight on local variability in each adaptive threshold |
+| `bg_radius` | 30 km | Radius used in the watershed step |
+| `min_area_km2` | 4.05 km² | Smallest object kept (5 grid points at 0.9 km) |
+| `advection_time_min`, `halfwidth_km` | 20 min, 10 km | Length and half-width of the downwind corridor |
+| `min_support_frac`, `min_support_px` | 0.3, 5 | Overlap an object needs with the support mask |
+| `frac_strong_cutoff` | 0.5 | Share of the object above the strong threshold for the strong label |
+
+The remaining fields (`theta_eps`, `use_advection`, `min_speed_ms`, `seed_stride_px`, `precip_floor_dbz`, `length_cut_km` and `aspect_cut`) are documented in `src/cesc/params.py`.
+
+Read the sensitivity tests in the paper before changing any of these for production work. Halving or doubling `advection_time_min` moves CESC area by about 4% and precipitation volume by -3.3% to +4.6%. Setting `bg_radius` to 10 km or 50 km changes CESC area by +14.2% and -4.8%. `box_sizes` matters most: doubling it to (20, 40, 80) km raises CESC area by about 46% and precipitation volume by about 62%, so choose the box sizes from the size of the cells in your own data and grid.
+
+## 7. Comparing with the original research pipeline
+
+If you compare this package with output from the research scripts behind the papers, read `PORTING_NOTES.md` first. The package corrects four things in those scripts, and two of them change existing output. The research runner never updated the previous `RAINNC` value after the first hour of a month, so the second timestep of every month carries two hours of accumulation. It also attached the downstream metrics (`area_ece_px`, `area_ds_px`, `area_sup_px`, `frac_support`, `L_ds_km`, `W_ds_km`) to the wrong objects at any timestep where the gate dropped an object. Columns written before that step, and the gate decisions themselves, are unaffected. For February 2017, the package reproduces the research `labels_env` footprint at all 672 hourly timesteps, with only the object numbering changed.
+
+## 8. Citation
+
+If you use `cesc`, please cite the algorithm paper and the case study it builds on. `CITATION.cff` holds the same information in machine-readable form.
+
+Afrifa, F. O., B. Geerts, L. Xue, and J. Kukulies, 2026a: Cold-season emergent convection in frontal systems and its impact on orographic precipitation. Part 1: Detection algorithm. *J. Atmos. Sci.*, in revision.
+
+Afrifa, F. O., B. Geerts, L. Xue, S. Chen, C. Hohman, C. Grasmick, and T. Zaremba, 2025: A case study of cold-season emergent orographic convection and its impact on precipitation. Part I: Mesoscale analysis. *Mon. Wea. Rev.*, **153**, 2229-2250, https://doi.org/10.1175/MWR-D-24-0241.1.
+
+Afrifa, F. O., and co-authors, 2026: A case study of cold-season emergent orographic convection and its impact on precipitation. Part 2: High-resolution LES analysis of convective cell evolution and precipitation processes. *Mon. Wea. Rev.*, **154**, 1269-1290, https://doi.org/10.1175/MWR-D-25-0157.1.
+
+The cell detection follows Yeh and Colle (2025), the `theta_e` formula follows Bolton (1980) and the definition of potential instability follows Schultz and Schumacher (1999).
+
+Bolton, D., 1980: The computation of equivalent potential temperature. *Mon. Wea. Rev.*, **108**, 1046-1053.
+
+Schultz, D. M., and P. N. Schumacher, 1999: The use and misuse of conditional symmetric instability. *Mon. Wea. Rev.*, **127**, 2709-2732.
+
+Yeh, P., and B. A. Colle, 2025: A comparison of approaches to objectively identify precipitation structures within the comma head of mid-latitude cyclones. *J. Atmos. Oceanic Technol.*, **42**, 463-477, https://doi.org/10.1175/JTECH-D-24-0055.1.
+
+## 9. Repository layout
+
+```text
+cesc/
+├── README.md
+├── setup_env.py
+├── pyproject.toml
+├── environment.yml
+├── CITATION.cff
+├── PORTING_NOTES.md
+├── src/cesc/      the package
+├── examples/      quickstart notebook, run scripts, a YAML configuration and a PBS script
+└── tests/         pytest suite
 ```
 
-Run `execute-cesc --help` for the full parameter list.
-
----
-
-## Output variables
-
-### Gridded NetCDF (one record per hour)
-
-| Variable | dtype | Description |
-|---|---|---|
-| `labels_env` | int16 | All kept CESC objects (compact 1..N labels) |
-| `labels_faint` | int16 | Subset of labels_env where frac_strong < cutoff |
-| `labels_strong` | int16 | Subset of labels_env where frac_strong >= cutoff |
-| `faint_det` | int8 | Pixel-level faint detection mask |
-| `strong_det` | int8 | Pixel-level strong detection mask |
-| `ece_core` | int8 | ECE core mask (both conditions met) |
-| `corridor` | int8 | Downstream advection corridor mask |
-| `support` | int8 | ECE core union corridor |
-| `ece_dist_km` | float32 | Distance to nearest ECE pixel (km) |
-| `Z_bg` | float32 | Display-only smoothed background reflectivity |
-| `Enh` | float32 | Z minus display background (drives watershed seeding) |
-| `rainnc_inc` | float32 | Hourly precipitation increment (mm) |
-| `convective_precip` | float32 | Hourly precip inside CESC objects (mm; 0 outside) |
-| `convective_precip_masked` | float32 | Same, NaN outside CESC objects |
-| `CTT` | float32 | WRF column cloud-top temperature (degrees C) |
-
-### Object parquet table (one row per object per hour)
-
-Key columns include `time`, `object_uid`, `cls` (cell/band/complex),
-`intensity_cls` (faint/strong), `size_km2`, `major_km`, `minor_km`, `aspect`,
-`frac_strong`, `frac_within_ece`, `frac_downstream`, `centroid_lat`,
-`centroid_lon`, `dist_to_ece_core_km`, `L_ds_km`, `W_ds_km`, and
-`hwp_mean_gm2`.
-
----
-
-## Algorithm parameters (Table 1, Afrifa et al. Part 1)
-
-| Parameter | Default | Description |
-|---|---|---|
-| `unstable_threshold` | 1.0 K | Minimum cumulative PI theta_e drop |
-| `stable_threshold` | 2.0 K | Minimum cumulative stable layer theta_e rise |
-| `faint_min_diff` | 2.0 dBZ | Absolute floor for faint detection |
-| `faint_k_sigma` | 0.30 | Sigma multiplier for faint threshold |
-| `strong_min_diff` | 5.0 dBZ | Absolute floor for strong detection |
-| `strong_k_sigma` | 0.30 | Sigma multiplier for strong threshold |
-| `min_area` | 6.0 km^2 | Minimum object area |
-| `min_support_frac` | 0.30 | Minimum fraction of object inside support mask |
-| `min_support_px` | 5 | Minimum pixel count inside support mask |
-| `advection_time` | 20 min | Assumed convective lifespan for corridor length |
-| `halfwidth` | 10.0 km | Lateral half-width of the downstream corridor |
-| `min_speed` | 2.0 m/s | Minimum wind speed to draw a corridor |
-| `frac_strong_cutoff` | 0.5 | Threshold separating faint from strong objects |
-
-Note: `box_sizes` (default 20, 40, 80 km) is a structural design choice. 
-It controls which spatial scales are used to compute
-the adaptive detection background.  Smaller boxes catch sharp isolated cells;
-larger boxes catch broader organised clusters.  The union across scales is taken
-to avoid missing either type.  This follows the same multi-scale union design
-used by Yeh and Colle (2025).
-
----
-
-## Tuning `frac_strong_cutoff`
-
-The `frac_strong_cutoff` parameter controls the boundary between faint and
-strong objects.  In the SNOWIE dataset, we set this following:
-
-1. Run the single-time-step example on the 7 February 2017 22 UTC snapshot
-   (the best-observed CESC event in the SNOWIE dataset).
-2. Examine panel 4 of the quicklook figure, which shows faint objects in blue
-   and strong objects in red.
-3. Adjust `frac_strong_cutoff` until the split looks physically reasonable for
-   that case (roughly half the objects by count falling on each side is a good
-   starting point).
-4. Use the same value for all months in the seasonal run.
-
----
-
-## Running the tests
-
-```bash
-pip install -e ".[dev]"
-pytest tests/ -v
-```
-
-The tests do not require any WRF data.  They verify correct output shapes and
-types on synthetic reflectivity fields.
-
----
-
-## Dataset
-
-The SNOWIE 900 m WRF simulation data used in Afrifa et al. (2025, 2026, Part 1)
-is available from the NSF NCAR Research Data Archive (RDA), dataset ds604.0.
-
----
-
-## Citation
-
-If you use this package in published research, please cite:
-
-> Afrifa, F. O., B. Geerts, and co-authors, 2026: Climatology of cold-season
-> emergent convection in frontal systems and its impact on orographic
-> precipitation. Part 1: Detection algorithm. *Mon. Wea. Rev.*, in review.
-
-And for the SNOWIE case study that motivated the algorithm:
-
-> Afrifa, F. O., B. Geerts, L. Xue, S. Chen, C. Hohman, C. Grasmick, and
-> T. Zaremba, 2025: A case study of cold-season emergent orographic convection
-> and its impact on precipitation. Part I: Mesoscale analysis. *Mon. Wea. Rev.*,
-> **153**, 2229-2250. https://doi.org/10.1175/MWR-D-24-0241.1
-
-The cell detection method is adapted from:
-
-> Yeh, P., and B. A. Colle, 2025: A Comparison of Approaches to Objectively
-> Identify Precipitation Structures within the Comma Head of Mid-Latitude
-> Cyclones. *J. Atmos. Oceanic Technol.*, **42**, 463-477.
-> https://doi.org/10.1175/JTECH-D-24-0055.1
-
----
-
-## Acknowledgements
-
-This work was supported by the National Science Foundation under grants
-AGS-1546939 and AGS-1546986 (SNOWIE), and by the Wyoming Water Development
-Office.  Computing resources were provided by NSF NCAR through the Derecho
-supercomputer (Computational and Information Systems Laboratory 2023).
-
----
-
-## Licence
-
-MIT -- see `LICENSE`.
+The package code is under `src/cesc/`. Questions and bug reports go to the GitHub issue tracker at https://github.com/OT-Afrifa/cesc/issues.

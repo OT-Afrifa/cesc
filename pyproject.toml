@@ -1,83 +1,41 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "cesc"
-version = "1.0.0"
-description = "Identification of Convection Embedded within or Emergent from Stratiform Clouds (CESC) in cold-season orographic precipitation"
+version = "0.1.0"
+description = "Identification of convection embedded within or emergent from cold-season stratiform clouds (CESC)"
 readme = "README.md"
-license = { file = "LICENSE" }
-authors = [
-    { name = "Francis Osei Tutu Afrifa", email = "fafrifa@uwyo.edu" },
-    { name = "Bart Geerts", email = "geerts@uwyo.edu" },
-]
-keywords = [
-    "atmospheric-science",
-    "orographic-precipitation",
-    "convection",
-    "WRF",
-    "SNOWIE",
-    "embedded-convection",
-    "cold-season",
-]
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Science/Research",
-    "Topic :: Scientific/Engineering :: Atmospheric Science",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-]
-requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [{name = "Francis Osei Tutu Afrifa"}]
+requires-python = ">=3.7"
 dependencies = [
-    "numpy>=1.24",
-    "xarray>=2023.1",
-    "pandas>=2.0",
-    "scipy>=1.10",
-    "scikit-image>=0.20",
-    "numba>=0.57",
-    "netCDF4>=1.6",
-    "cartopy>=0.21",
-    "matplotlib>=3.7",
-    "wrf-python>=1.3.4",
-    "pyproj>=3.5",
-    "geopandas>=0.13",
+    "numpy>=1.21",
+    "scipy>=1.7",
+    "pandas>=1.3",
+    "xarray>=0.20",
+    "scikit-image>=0.19",
+    "netCDF4>=1.6",   # xarray needs it to open WRF NetCDF-4 files
+    "PyYAML>=6.0",    # cesc run config.yaml
+    "numba>=0.55",    # speed only; results match the numpy path
+    "importlib-metadata<5; python_version < '3.8'",  # xarray 0.20 needs the old entry-points API
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=7.0",
-    "pytest-cov>=4.0",
-    "black>=23.0",
-    "ruff>=0.1",
-]
-docs = [
-    "sphinx>=7.0",
-    "sphinx-rtd-theme>=1.3",
-    "nbsphinx>=0.9",
-]
+fast = ["numba>=0.50"]
+wrf = ["netCDF4", "wrf-python>=1.3.4"]
+cli = ["PyYAML"]
+plot = ["matplotlib>=3.5", "cartopy>=0.20"] # the quicklook figure
+dev  = ["pytest>=6", "ruff"]
+all  = ["wrf-python>=1.3.4", "matplotlib>=3.5", "cartopy>=0.20"]
+test = ["pytest"]
 
 [project.urls]
-Homepage = "https://github.com/OT-Afrifa/cesc"
 Repository = "https://github.com/OT-Afrifa/cesc"
-Issues = "https://github.com/OT-Afrifa/cesc/issues"
-Documentation = "https://cesc.readthedocs.io"
 
 [project.scripts]
-execute-cesc = "cesc.scripts.execute_cesc:main"
+cesc = "cesc.cli:main"
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["cesc*"]
-
-[tool.black]
-line-length = 100
-target-version = ["py39", "py310", "py311"]
-
-[tool.ruff]
-line-length = 100
-select = ["E", "F", "W"]
-ignore = ["E501"]
+where = ["src"]

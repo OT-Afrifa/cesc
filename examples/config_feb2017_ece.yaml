@@ -1,0 +1,11 @@
+# cesc run examples/config_feb2017_ece.yaml
+input: /path/to/extracted/WRF_extracted_vars_900m_201702.nc
+wrfout_dir: /path/to/wrfout_d02/
+precip_rate_file: /path/to/prate/PRATE_surface_201702.nc
+precip_rate_var: prate_surface
+out_nc: /path/to/cesc_output/CESC_ECE_bs124_grids_201702.nc
+out_csv: /path/to/cesc_output/CESC_ECE_bs124_objects_201702.csv
+checkpoint_every: 48
+params:
+  env_mode: ECE          # stable boundary layer required (stable_BL = YES)
+  # everything else: Table 1 defaults from cesc.Params

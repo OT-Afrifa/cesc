@@ -1,0 +1,23 @@
+# Complete environment for cesc, including the packages that pip often
+# cannot build from source (wrf-python, cartopy).
+#
+#   conda env create -f cesc_environment.yml
+#   conda activate cesc_environment
+#   python -m pip install -e .
+name: cesc_environment
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy
+  - scipy
+  - pandas
+  - xarray
+  - scikit-image
+  - netcdf4
+  - pyyaml
+  - numba
+  - wrf-python
+  - matplotlib
+  - cartopy
+  - pip

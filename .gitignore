@@ -1,0 +1,26 @@
+# Python and build output
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local working copies and scratch, never published
+dev/
+old/
+*_frozen*
+*_worked*
+*_hold*
+README_new.md
+
+# Model data and run output
+*.nc
+*.parquet
+wrfout_*
+out/
+*.log
