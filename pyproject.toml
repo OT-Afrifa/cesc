@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cesc"
-version = "0.1.0"
+version = "0.1.1"
 description = "Identification of convection embedded within or emergent from cold-season stratiform clouds (CESC)"
 readme = "README.md"
 license = {text = "MIT"}
@@ -16,7 +16,9 @@ dependencies = [
     "pandas>=1.3",
     "xarray>=0.20",
     "scikit-image>=0.19",
-    "netCDF4>=1.6",   # xarray needs it to open WRF NetCDF-4 files
+    # "netCDF4>=1.6",   # xarray needs it to open WRF NetCDF-4 files
+    "netCDF4>=1.6,<1.6.5; python_version < '3.8'",  # 1.6.4 is the last release with a cp37 wheel
+    "netCDF4>=1.6; python_version >= '3.8'",
     "PyYAML>=6.0",    # cesc run config.yaml
     "numba>=0.55",    # speed only; results match the numpy path
     "importlib-metadata<5; python_version < '3.8'",  # xarray 0.20 needs the old entry-points API
