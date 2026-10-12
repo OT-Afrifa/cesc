@@ -15,7 +15,7 @@ Quick use:
         out_parquet_path="out/CESC_ECE_objects.parquet",
         all_files_path=None)
 """
-__version__ = "0.1.1"
+__version__ = "0.1.0"
 
 from .params import Params
 from .pipeline import (identify_time, run_wrf_month, run,

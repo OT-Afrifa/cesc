@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cesc"
-version = "0.1.1"
+version = "0.1.0"
 description = "Identification of convection embedded within or emergent from cold-season stratiform clouds (CESC)"
 readme = "README.md"
 license = {text = "MIT"}

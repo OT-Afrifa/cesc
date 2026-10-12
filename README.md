@@ -65,7 +65,7 @@ python setup_env.py
 ```text
 Package root : /path/to/cesc
 src/ exists  : True
-import cesc  : OK, version 0.1.1
+import cesc  : OK, version 0.1.0
 resolves to  : /path/to/cesc/src/cesc/__init__.py
 ```
 
