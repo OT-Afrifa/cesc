@@ -13,7 +13,9 @@ requires-python = ">=3.7"
 dependencies = [
     "numpy>=1.21",
     "scipy>=1.7",
-    "pandas>=1.3",
+    # "pandas>=1.3",
+    "pandas>=1.3,<2; python_version < '3.9'",   # xarray stops at 2023.1 on 3.8, which predates pandas 2
+    "pandas>=1.3; python_version >= '3.9'",
     "xarray>=0.20",
     "scikit-image>=0.19",
     # "netCDF4>=1.6",   # xarray needs it to open WRF NetCDF-4 files
